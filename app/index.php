@@ -5,15 +5,14 @@ ini_set('display_errors', 1);
 
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
-use Psr\Http\Server\RequestHandlerInterface;
+use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
+use Slim\Psr7\Response as ResponseClass;
 use Slim\Factory\AppFactory;
-use Slim\Routing\RouteCollectorProxy;
-use Slim\Routing\RouteContext;
 
 require __DIR__ . '/../vendor/autoload.php';
 
 require_once './db/AccesoDatos.php';
-// require_once './middlewares/Logger.php';
+require_once './middlewares/AuthMiddleware.php';
 
 require_once './controllers/UsuarioController.php';
 
@@ -30,18 +29,46 @@ $app->addErrorMiddleware(true, true, true);
 // Add parse body
 $app->addBodyParsingMiddleware();
 
-// Routes
-$app->group('/usuarios', function (RouteCollectorProxy $group) {
-    $group->get('[/]', \UsuarioController::class . ':TraerTodos');
-    $group->get('/{usuario}', \UsuarioController::class . ':TraerUno');
-    $group->post('[/]', \UsuarioController::class . ':CargarUno');
-  });
+// MIDLEWWARES
+$usuarioMW = function (Request $request, RequestHandler $requestHandler) {
+  $params = $request->getQueryParams();
 
-$app->get('[/]', function (Request $request, Response $response) {    
-    $payload = json_encode(array("mensaje" => "Slim Framework 4 PHP"));
-    
-    $response->getBody()->write($payload);
+  echo "Entro al Middleware \n";
+
+
+  if(isset($params["nombre"], $params["apellido"])){ 
+    $response = $requestHandler->handle($request);
+    echo "Salgo del verbo al middleware \n";
+
+    return $response;
+  } else { 
+    echo "NO entro al verbo \n";
+
+    $response = new ResponseClass();
+    $response->getBody()->write(json_encode(array("error" => "Parametros incorrectos")));
     return $response->withHeader('Content-Type', 'application/json');
-});
+  }
+};
+
+// Routes
+
+$app->get("/", function (Request $request, Response $response) {    
+  var_dump($_ENV);
+
+  echo "Entro al verbo \n";
+  $response->getBody()->write(json_encode(array("estado", "funciona")));
+  return $response->withHeader('Content-Type', 'application/json');
+})->add(new AuthMiddleware("Administrador"));
+
+$app->get('/usuario', function (Request $request, Response $response) {    
+  $params = $request->getQueryParams();
+  $nombre = $params["nombre"];
+  $apellido = $params["apellido"];  
+
+  echo "Entro al verbo \n";
+
+  $response->getBody()->write(json_encode(array($nombre, $apellido)));
+  return $response->withHeader('Content-Type', 'application/json');
+})->add(new AuthMiddleware("Cocinero"));
 
 $app->run();
